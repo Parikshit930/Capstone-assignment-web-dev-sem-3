@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>University Campus Management System</title>
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Socket.io Client -->
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    .gradient-header {
+      background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="gradient-header text-white shadow-lg sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-3 sm:px-6 lg:px-8 flex flex-wrap justify-between items-center gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center border border-white/20">
+          <i class="fa-solid fa-graduation-cap text-2xl text-amber-300"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold tracking-tight">University Campus Portal</h1>
+          <p class="text-xs text-blue-200">Backend Capstone Demonstration Platform</p>
+        </div>
+      </div>
+
+      <!-- Socket Status & Current User Identity -->
+      <div class="flex items-center space-x-4">
+        <div id="socket-badge" class="flex items-center space-x-2 bg-black/20 px-3 py-1.5 rounded-full border border-white/10 text-xs">
+          <span id="socket-dot" class="w-2.5 h-2.5 rounded-full bg-red-400"></span>
+          <span id="socket-text" class="font-medium text-slate-200">Socket: Disconnected</span>
+        </div>
+
+        <div id="user-pill" class="hidden flex items-center space-x-2 bg-white/10 px-3 py-1.5 rounded-lg border border-white/20 text-xs">
+          <i class="fa-solid fa-user-circle text-amber-300 text-sm"></i>
+          <div>
+            <div id="user-pill-name" class="font-semibold text-white">Not logged in</div>
+            <div id="user-pill-role" class="text-[10px] text-blue-200 uppercase tracking-wider">GUEST</div>
+          </div>
+          <button onclick="logout()" class="ml-2 text-rose-300 hover:text-white transition" title="Logout">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full">
+
+    <!-- One-Click Role Switcher Bar -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-1">
+            <i class="fa-solid fa-bolt text-amber-500 mr-1.5"></i> One-Click Quick Role Login
+          </h2>
+          <p class="text-xs text-slate-600">Instantly switch between roles to test RBAC and role-specific views.</p>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <button onclick="quickLogin('admin@campus.edu')" class="px-3.5 py-2 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-sm flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-user-shield"></i> Admin (All Access)
+          </button>
+          <button onclick="quickLogin('alan.turing@campus.edu')" class="px-3.5 py-2 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-chalkboard-user"></i> Faculty (Dr. Turing)
+          </button>
+          <button onclick="quickLogin('alice@campus.edu')" class="px-3.5 py-2 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-sm flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-user-graduate"></i> Student (Alice - 100%)
+          </button>
+          <button onclick="quickLogin('charlie@campus.edu')" class="px-3.5 py-2 rounded-lg text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white shadow-sm flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-triangle-exclamation"></i> Student (Charlie - Defaulter 25%)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="border-b border-slate-200 mb-6">
+      <nav class="flex space-x-6">
+        <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="tab-btn pb-3 text-sm font-medium border-b-2 border-blue-600 text-blue-600 flex items-center gap-2">
+          <i class="fa-solid fa-chart-line"></i> Dashboard & Analytics
+        </button>
+        <button onclick="switchTab('attendance')" id="tab-btn-attendance" class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-2">
+          <i class="fa-solid fa-clipboard-user"></i> Attendance Module
+        </button>
+        <button onclick="switchTab('announcements')" id="tab-btn-announcements" class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-2">
+          <i class="fa-solid fa-bullhorn"></i> Live Announcements
+          <span id="announcement-count-badge" class="ml-1 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-blue-100 text-blue-800">0</span>
+        </button>
+        <button onclick="switchTab('courses')" id="tab-btn-courses" class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-2">
+          <i class="fa-solid fa-book-open"></i> Courses & Sections
+        </button>
+        <button onclick="switchTab('apitester')" id="tab-btn-apitester" class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-2">
+          <i class="fa-solid fa-terminal"></i> API Inspector
+        </button>
+      </nav>
+    </div>
+
+    <!-- TAB 1: DASHBOARD & AGGREGATION ANALYTICS -->
+    <div id="tab-dashboard" class="tab-content space-y-6">
+      <!-- Aggregation Metric Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Aggregation Pipeline 1</span>
+            <span class="px-2 py-0.5 text-[10px] font-bold rounded-md bg-rose-100 text-rose-700">Threshold: &lt;75%</span>
+          </div>
+          <div class="flex items-baseline justify-between">
+            <div id="stat-defaulters-count" class="text-3xl font-bold text-rose-600">-</div>
+            <i class="fa-solid fa-user-xmark text-2xl text-rose-200"></i>
+          </div>
+          <p class="text-xs text-slate-500 mt-2">Identified Academic Defaulters</p>
+        </div>
+
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Aggregation Pipeline 2</span>
+            <span class="px-2 py-0.5 text-[10px] font-bold rounded-md bg-emerald-100 text-emerald-700">Capacity</span>
+          </div>
+          <div class="flex items-baseline justify-between">
+            <div id="stat-sections-count" class="text-3xl font-bold text-slate-800">-</div>
+            <i class="fa-solid fa-users-rectangle text-2xl text-emerald-200"></i>
+          </div>
+          <p class="text-xs text-slate-500 mt-2">Active Sections Evaluated</p>
+        </div>
+
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Aggregation Pipeline 3</span>
+            <span class="px-2 py-0.5 text-[10px] font-bold rounded-md bg-blue-100 text-blue-700">Curriculum</span>
+          </div>
+          <div class="flex items-baseline justify-between">
+            <div id="stat-dept-count" class="text-3xl font-bold text-blue-600">-</div>
+            <i class="fa-solid fa-building-columns text-2xl text-blue-200"></i>
+          </div>
+          <p class="text-xs text-slate-500 mt-2">Academic Departments</p>
+        </div>
+      </div>
+
+      <!-- Aggregation Analytics Details -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Defaulters Table -->
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <i class="fa-solid fa-triangle-exclamation text-rose-500"></i>
+              Low Attendance Defaulters List
+            </h3>
+            <button onclick="loadAnalytics()" class="text-xs text-blue-600 hover:underline">
+              <i class="fa-solid fa-rotate-right"></i> Refresh
+            </button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-500 border-b border-slate-200">
+                <tr>
+                  <th class="p-2.5">Student</th>
+                  <th class="p-2.5">Course</th>
+                  <th class="p-2.5 text-center">Attended / Total</th>
+                  <th class="p-2.5 text-right">Percentage</th>
+                </tr>
+              </thead>
+              <tbody id="defaulters-table-body" class="divide-y divide-slate-100">
+                <tr><td colspan="4" class="p-4 text-center text-slate-400">Loading data...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Section Capacity Table -->
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <i class="fa-solid fa-chart-pie text-emerald-500"></i>
+              Section Capacity & Occupancy Rates
+            </h3>
+            <span class="text-xs text-slate-400">Pipeline 2</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-500 border-b border-slate-200">
+                <tr>
+                  <th class="p-2.5">Section</th>
+                  <th class="p-2.5">Course</th>
+                  <th class="p-2.5">Faculty</th>
+                  <th class="p-2.5 text-right">Occupancy %</th>
+                </tr>
+              </thead>
+              <tbody id="capacity-table-body" class="divide-y divide-slate-100">
+                <tr><td colspan="4" class="p-4 text-center text-slate-400">Loading data...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: ATTENDANCE MODULE -->
+    <div id="tab-attendance" class="tab-content hidden space-y-6">
+      <div id="attendance-student-view" class="space-y-4">
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <h3 class="text-base font-bold text-slate-800 mb-1 flex items-center gap-2">
+            <i class="fa-solid fa-user-check text-blue-600"></i> My Subject-Wise Attendance Summary
+          </h3>
+          <p class="text-xs text-slate-500 mb-4">Real-time attendance percentage calculated from recorded class sessions.</p>
+          <div id="student-attendance-cards" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="p-4 bg-slate-50 rounded-lg text-center text-xs text-slate-400">Log in as a student to view your attendance</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Faculty Mark Attendance Card -->
+      <div id="attendance-faculty-view" class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <h3 class="text-base font-bold text-slate-800 mb-1 flex items-center gap-2">
+          <i class="fa-solid fa-marker text-emerald-600"></i> Mark Attendance (Faculty Action)
+        </h3>
+        <p class="text-xs text-slate-500 mb-4">Enforces business rule: You can only record attendance for sections assigned to you.</p>
+
+        <form id="mark-attendance-form" onsubmit="handleMarkAttendance(event)" class="space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Select Section</label>
+              <select id="mark-section-select" class="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" required>
+                <option value="">Select Section</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Session / Lecture No.</label>
+              <input type="number" id="mark-session-no" class="w-full text-xs p-2.5 border border-slate-300 rounded-lg" value="5" min="1" required>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Date</label>
+              <input type="date" id="mark-date" class="w-full text-xs p-2.5 border border-slate-300 rounded-lg" required>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Topic Covered</label>
+            <input type="text" id="mark-topic" class="w-full text-xs p-2.5 border border-slate-300 rounded-lg" placeholder="e.g. Distributed Consensus & Raft Protocol" required>
+          </div>
+
+          <div id="mark-students-roster" class="border border-slate-200 rounded-lg p-3 bg-slate-50 space-y-2">
+            <span class="text-xs text-slate-500 italic">Select a section above to view the student roster</span>
+          </div>
+
+          <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition">
+            <i class="fa-solid fa-check"></i> Submit Attendance & Broadcast
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- TAB 3: REAL-TIME ANNOUNCEMENTS -->
+    <div id="tab-announcements" class="tab-content hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Announcements Feed -->
+        <div class="lg:col-span-2 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <i class="fa-solid fa-tower-broadcast text-blue-600"></i> Live University Announcement Feed
+            </h3>
+            <span class="text-xs text-slate-400">Delivered via Socket.IO</span>
+          </div>
+          <div id="announcements-feed" class="space-y-3">
+            <div class="p-6 bg-white rounded-xl border border-slate-200 text-center text-xs text-slate-400">Loading announcements...</div>
+          </div>
+        </div>
+
+        <!-- Post Announcement Form -->
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm h-fit">
+          <h3 class="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+            <i class="fa-solid fa-pen-nib text-purple-600"></i> Broadcast Announcement
+          </h3>
+          <form onsubmit="handlePostAnnouncement(event)" class="space-y-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Title</label>
+              <input type="text" id="ann-title" class="w-full text-xs p-2.5 border border-slate-300 rounded-lg" placeholder="e.g. Campus Hackathon 2026" required>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Target Audience</label>
+              <select id="ann-audience" class="w-full text-xs p-2.5 border border-slate-300 rounded-lg">
+                <option value="all">Entire Campus (All)</option>
+                <option value="course">Course-Specific</option>
+                <option value="section">Section-Specific</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Priority</label>
+              <select id="ann-priority" class="w-full text-xs p-2.5 border border-slate-300 rounded-lg">
+                <option value="high">High</option>
+                <option value="medium" selected>Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Content</label>
+              <textarea id="ann-content" rows="3" class="w-full text-xs p-2.5 border border-slate-300 rounded-lg" placeholder="Write announcement details..." required></textarea>
+            </div>
+            <button type="submit" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition">
+              <i class="fa-solid fa-paper-plane mr-1"></i> Post & Broadcast Live
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: COURSES & SECTIONS -->
+    <div id="tab-courses" class="tab-content hidden space-y-6">
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+            <i class="fa-solid fa-book text-blue-600"></i> Course Catalog & Syllabus
+          </h3>
+          <span class="text-xs text-slate-400">Total Courses: <span id="courses-total-badge">0</span></span>
+        </div>
+        <div id="courses-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div class="p-6 text-center text-xs text-slate-400">Loading courses...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 5: API INSPECTOR -->
+    <div id="tab-apitester" class="tab-content hidden space-y-6">
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <h3 class="text-base font-bold text-slate-800 mb-2 flex items-center gap-2">
+          <i class="fa-solid fa-code text-indigo-600"></i> Live REST API Console & Payload Inspector
+        </h3>
+        <p class="text-xs text-slate-500 mb-4">Inspect raw JSON responses directly from Express.js endpoints.</p>
+
+        <div class="flex flex-wrap gap-2 mb-4">
+          <button onclick="inspectEndpoint('/api/health')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-mono">GET /api/health</button>
+          <button onclick="inspectEndpoint('/api/courses')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-mono">GET /api/courses</button>
+          <button onclick="inspectEndpoint('/api/sections')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-mono">GET /api/sections</button>
+          <button onclick="inspectEndpoint('/api/reports/attendance-analytics')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-mono">GET /api/reports/attendance-analytics</button>
+          <button onclick="inspectEndpoint('/api/reports/enrollment-capacity')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-mono">GET /api/reports/enrollment-capacity</button>
+          <button onclick="inspectEndpoint('/api/reports/department-summary')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-mono">GET /api/reports/department-summary</button>
+        </div>
+
+        <div class="relative">
+          <pre id="api-inspector-output" class="bg-slate-900 text-emerald-400 p-4 rounded-xl text-xs font-mono overflow-x-auto max-h-96">// Click an endpoint above to execute request...</pre>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
+    University Campus Management System • Capstone Project Backend Demonstration • Powered by Node.js, Express, MongoDB & Socket.IO
+  </footer>
+
+  <!-- Client Script -->
+  <script>
+    let currentUser = null;
+    let currentToken = localStorage.getItem('token') || '';
+    let socket = null;
+    let cachedSections = [];
+
+    // Set today's date in form
+    document.getElementById('mark-date').value = new Date().toISOString().split('T')[0];
+
+    // Tab Switching
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('border-blue-600', 'text-blue-600');
+        btn.classList.add('border-transparent', 'text-slate-500');
+      });
+
+      document.getElementById('tab-' + tabId).classList.remove('hidden');
+      document.getElementById('tab-btn-' + tabId).classList.add('border-blue-600', 'text-blue-600');
+      document.getElementById('tab-btn-' + tabId).classList.remove('border-transparent', 'text-slate-500');
+
+      if (tabId === 'dashboard') loadAnalytics();
+      if (tabId === 'attendance') loadAttendanceTab();
+      if (tabId === 'announcements') loadAnnouncements();
+      if (tabId === 'courses') loadCourses();
+    }
+
+    // Quick Login
+    async function quickLogin(email) {
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password: 'Password@123' })
+        });
+        const data = await res.json();
+        if (data.success) {
+          currentToken = data.data.tokens.accessToken;
+          currentUser = data.data.user;
+          localStorage.setItem('token', currentToken);
+          localStorage.setItem('user', JSON.stringify(currentUser));
+          updateUserUI();
+          initSocket();
+          loadAnalytics();
+          loadAttendanceTab();
+          loadAnnouncements();
+        } else {
+          alert('Login failed: ' + data.message);
+        }
+      } catch (err) {
+        alert('Network error: ' + err.message);
+      }
+    }
+
+    function logout() {
+      currentToken = '';
+      currentUser = null;
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      updateUserUI();
+      if (socket) socket.disconnect();
+      document.getElementById('socket-dot').className = 'w-2.5 h-2.5 rounded-full bg-red-400';
+      document.getElementById('socket-text').textContent = 'Socket: Disconnected';
+      loadAnalytics();
+    }
+
+    function updateUserUI() {
+      const pill = document.getElementById('user-pill');
+      if (currentUser) {
+        pill.classList.remove('hidden');
+        document.getElementById('user-pill-name').textContent = currentUser.name;
+        document.getElementById('user-pill-role').textContent = currentUser.role;
+      } else {
+        pill.classList.add('hidden');
+      }
+    }
+
+    // Initialize Socket.io
+    function initSocket() {
+      if (!currentToken) return;
+      if (socket) socket.disconnect();
+
+      socket = io({
+        auth: { token: currentToken }
+      });
+
+      socket.on('connect', () => {
+        document.getElementById('socket-dot').className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
+        document.getElementById('socket-text').textContent = `Socket: Live (${currentUser.role})`;
+      });
+
+      socket.on('disconnect', () => {
+        document.getElementById('socket-dot').className = 'w-2.5 h-2.5 rounded-full bg-red-400';
+        document.getElementById('socket-text').textContent = 'Socket: Disconnected';
+      });
+
+      // Real-time announcement listener
+      socket.on('announcement:new', (payload) => {
+        prependAnnouncementCard(payload.announcement);
+        const badge = document.getElementById('announcement-count-badge');
+        badge.textContent = Number(badge.textContent || 0) + 1;
+      });
+
+      // Real-time attendance alert listener
+      socket.on('attendance:personal_status', (data) => {
+        alert(`🔔 Attendance Recorded: You were marked "${data.status.toUpperCase()}" for session #${data.sessionNumber} on ${new Date(data.date).toLocaleDateString()}`);
+        loadAttendanceTab();
+      });
+    }
+
+    // Load Analytics (Aggregation Pipelines)
+    async function loadAnalytics() {
+      try {
+        const authHeader = currentToken ? { 'Authorization': `Bearer ${currentToken}` } : {};
+
+        // Pipeline 1: Defaulters
+        const res1 = await fetch('/api/reports/attendance-analytics?threshold=75&defaultersOnly=true', { headers: authHeader });
+        const d1 = await res1.json();
+        if (d1.success) {
+          document.getElementById('stat-defaulters-count').textContent = d1.data.defaultersCount;
+          const tbody = document.getElementById('defaulters-table-body');
+          if (d1.data.analytics.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-400">No defaulters below threshold</td></tr>';
+          } else {
+            tbody.innerHTML = d1.data.analytics.map(a => `
+              <tr class="hover:bg-slate-50 transition">
+                <td class="p-2.5 font-medium text-slate-800">${a.student.name}<br><span class="text-[10px] text-slate-400">${a.student.studentId || ''}</span></td>
+                <td class="p-2.5 text-slate-600">${a.course.courseCode}</td>
+                <td class="p-2.5 text-center font-mono">${a.attendedClasses} / ${a.totalClasses}</td>
+                <td class="p-2.5 text-right font-bold text-rose-600">${a.attendancePercentage}%</td>
+              </tr>
+            `).join('');
+          }
+        }
+
+        // Pipeline 2: Section Capacity
+        const res2 = await fetch('/api/reports/enrollment-capacity', { headers: authHeader });
+        const d2 = await res2.json();
+        if (d2.success) {
+          document.getElementById('stat-sections-count').textContent = d2.data.totalSectionsAnalyzed;
+          const tbody = document.getElementById('capacity-table-body');
+          tbody.innerHTML = d2.data.sections.map(s => `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="p-2.5 font-semibold text-slate-700">${s.sectionName}</td>
+              <td class="p-2.5 text-slate-600">${s.course.courseCode}</td>
+              <td class="p-2.5 text-slate-500">${s.faculty?.name || 'Unassigned'}</td>
+              <td class="p-2.5 text-right font-mono font-bold text-emerald-600">${s.occupancyPercentage}% <span class="text-[10px] text-slate-400">(${s.enrolledCount}/${s.maxCapacity})</span></td>
+            </tr>
+          `).join('');
+        }
+
+        // Pipeline 3: Department Summary
+        const res3 = await fetch('/api/reports/department-summary', { headers: authHeader });
+        const d3 = await res3.json();
+        if (d3.success) {
+          document.getElementById('stat-dept-count').textContent = d3.data.departments.length;
+        }
+      } catch (err) {
+        console.error('Analytics error:', err);
+      }
+    }
+
+    // Load Attendance Tab
+    async function loadAttendanceTab() {
+      if (!currentToken) return;
+
+      // Student View
+      if (currentUser && currentUser.role === 'student') {
+        document.getElementById('attendance-student-view').classList.remove('hidden');
+        document.getElementById('attendance-faculty-view').classList.add('hidden');
+
+        try {
+          const res = await fetch('/api/attendance/student', {
+            headers: { 'Authorization': `Bearer ${currentToken}` }
+          });
+          const data = await res.json();
+          if (data.success && data.data.summaries) {
+            const container = document.getElementById('student-attendance-cards');
+            container.innerHTML = data.data.summaries.map(s => {
+              const isDefaulter = s.percentage < 75;
+              return `
+                <div class="p-4 rounded-xl border ${isDefaulter ? 'border-rose-200 bg-rose-50/30' : 'border-slate-200 bg-white'} shadow-sm">
+                  <div class="flex justify-between items-start mb-2">
+                    <div>
+                      <span class="text-xs font-bold text-blue-600">${s.courseCode}</span>
+                      <h4 class="text-sm font-semibold text-slate-800">${s.courseTitle}</h4>
+                    </div>
+                    <span class="px-2 py-0.5 rounded text-[11px] font-bold ${isDefaulter ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}">
+                      ${s.percentage}%
+                    </span>
+                  </div>
+                  <div class="w-full bg-slate-200 rounded-full h-2 mb-3">
+                    <div class="h-2 rounded-full ${isDefaulter ? 'bg-rose-500' : 'bg-emerald-500'}" style="width: ${Math.min(s.percentage, 100)}%"></div>
+                  </div>
+                  <div class="grid grid-cols-4 text-center text-xs text-slate-600 bg-white/60 p-2 rounded-lg">
+                    <div><span class="block text-[10px] text-slate-400">Total</span><b>${s.totalClasses}</b></div>
+                    <div><span class="block text-[10px] text-emerald-600">Present</span><b>${s.attendedClasses - s.lateClasses}</b></div>
+                    <div><span class="block text-[10px] text-amber-600">Late</span><b>${s.lateClasses}</b></div>
+                    <div><span class="block text-[10px] text-rose-600">Absent</span><b>${s.absentClasses}</b></div>
+                  </div>
+                  ${isDefaulter ? '<div class="mt-2 text-[11px] text-rose-600 font-semibold"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Warning: Attendance below university 75% threshold!</div>' : ''}
+                </div>
+              `;
+            }).join('');
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      } else {
+        // Faculty / Admin View
+        document.getElementById('attendance-faculty-view').classList.remove('hidden');
+        loadFacultySections();
+      }
+    }
+
+    // Load Faculty Assigned Sections
+    async function loadFacultySections() {
+      try {
+        const endpoint = currentUser && currentUser.role === 'faculty' ? '/api/sections/my-assigned' : '/api/sections';
+        const res = await fetch(endpoint, {
+          headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+        const data = await res.json();
+        const select = document.getElementById('mark-section-select');
+        select.innerHTML = '<option value="">Select Section</option>';
+
+        const sections = data.data.sections || data.data;
+        cachedSections = sections;
+        sections.forEach(sec => {
+          select.innerHTML += `<option value="${sec._id}">${sec.sectionName} - ${sec.course?.courseCode || 'Course'} (${sec.academicYear})</option>`;
+        });
+
+        select.onchange = handleSectionChange;
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function handleSectionChange(e) {
+      const sectionId = e.target.value;
+      const rosterDiv = document.getElementById('mark-students-roster');
+      if (!sectionId) {
+        rosterDiv.innerHTML = '<span class="text-xs text-slate-400 italic">Select a section above to view the student roster</span>';
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/enrollments/section/${sectionId}`, {
+          headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+        const data = await res.json();
+        if (data.success && data.data.enrollments) {
+          rosterDiv.innerHTML = `
+            <div class="text-xs font-semibold text-slate-700 mb-2">Enrolled Students (${data.data.enrollments.length}):</div>
+            ${data.data.enrollments.map(enr => `
+              <div class="flex items-center justify-between bg-white p-2.5 rounded-lg border border-slate-200">
+                <div class="text-xs">
+                  <span class="font-bold text-slate-800">${enr.student.name}</span>
+                  <span class="text-[10px] text-slate-400 ml-1">(${enr.student.studentId || enr.student.email})</span>
+                </div>
+                <div class="flex gap-2">
+                  <label class="text-xs flex items-center gap-1 cursor-pointer">
+                    <input type="radio" name="status-${enr.student._id}" value="present" checked class="text-emerald-600"> <span class="text-emerald-700 font-semibold">Present</span>
+                  </label>
+                  <label class="text-xs flex items-center gap-1 cursor-pointer">
+                    <input type="radio" name="status-${enr.student._id}" value="absent" class="text-rose-600"> <span class="text-rose-700 font-semibold">Absent</span>
+                  </label>
+                  <label class="text-xs flex items-center gap-1 cursor-pointer">
+                    <input type="radio" name="status-${enr.student._id}" value="late" class="text-amber-600"> <span class="text-amber-700 font-semibold">Late</span>
+                  </label>
+                </div>
+              </div>
+            `).join('')}
+          `;
+        }
+      } catch (err) {
+        rosterDiv.innerHTML = `<span class="text-xs text-rose-500">Error loading roster: ${err.message}</span>`;
+      }
+    }
+
+    async function handleMarkAttendance(e) {
+      e.preventDefault();
+      const sectionId = document.getElementById('mark-section-select').value;
+      const sessionNumber = Number(document.getElementById('mark-session-no').value);
+      const date = document.getElementById('mark-date').value;
+      const topicCovered = document.getElementById('mark-topic').value;
+
+      const sec = cachedSections.find(s => s._id === sectionId);
+      const courseId = sec?.course?._id || sec?.course;
+
+      const records = [];
+      document.querySelectorAll('[name^="status-"]').forEach(radio => {
+        if (radio.checked) {
+          const studentId = radio.name.replace('status-', '');
+          records.push({ student: studentId, status: radio.value });
+        }
+      });
+
+      try {
+        const res = await fetch('/api/attendance/mark', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentToken}`
+          },
+          body: JSON.stringify({ sectionId, courseId, date, sessionNumber, topicCovered, records })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('✅ Attendance successfully marked and broadcasted!');
+          loadAnalytics();
+        } else {
+          alert('❌ Error: ' + data.message);
+        }
+      } catch (err) {
+        alert('❌ Network Error: ' + err.message);
+      }
+    }
+
+    // Load Announcements
+    async function loadAnnouncements() {
+      try {
+        const authHeader = currentToken ? { 'Authorization': `Bearer ${currentToken}` } : {};
+        const res = await fetch('/api/announcements', { headers: authHeader });
+        const data = await res.json();
+        if (data.success) {
+          const feed = document.getElementById('announcements-feed');
+          document.getElementById('announcement-count-badge').textContent = data.data.length;
+          if (data.data.length === 0) {
+            feed.innerHTML = '<div class="p-6 bg-white rounded-xl border border-slate-200 text-center text-xs text-slate-400">No announcements found.</div>';
+          } else {
+            feed.innerHTML = data.data.map(ann => renderAnnouncementCard(ann)).join('');
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function renderAnnouncementCard(ann) {
+      const priorityColors = {
+        high: 'bg-rose-100 text-rose-700 border-rose-200',
+        medium: 'bg-amber-100 text-amber-700 border-amber-200',
+        low: 'bg-blue-100 text-blue-700 border-blue-200'
+      };
+
+      return `
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${priorityColors[ann.priority] || priorityColors.medium}">
+                ${ann.priority}
+              </span>
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Audience: <b class="text-slate-800">${ann.targetAudience}</b>
+              </span>
+            </div>
+            <span class="text-[11px] text-slate-400">${new Date(ann.createdAt).toLocaleDateString()}</span>
+          </div>
+          <h4 class="text-sm font-bold text-slate-900 mb-1">${ann.title}</h4>
+          <p class="text-xs text-slate-600 leading-relaxed">${ann.content}</p>
+          <div class="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+            <span>Posted by: <b class="text-slate-700">${ann.createdBy?.name || 'Administrator'}</b></span>
+            ${ann.course ? `<span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${ann.course.courseCode || 'Course'}</span>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    function prependAnnouncementCard(ann) {
+      const feed = document.getElementById('announcements-feed');
+      const cardHtml = renderAnnouncementCard(ann);
+      feed.insertAdjacentHTML('afterbegin', cardHtml);
+    }
+
+    async function handlePostAnnouncement(e) {
+      e.preventDefault();
+      const title = document.getElementById('ann-title').value;
+      const targetAudience = document.getElementById('ann-audience').value;
+      const priority = document.getElementById('ann-priority').value;
+      const content = document.getElementById('ann-content').value;
+
+      try {
+        const res = await fetch('/api/announcements', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentToken}`
+          },
+          body: JSON.stringify({ title, targetAudience, priority, content })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('✅ Announcement posted and broadcasted over Socket.IO!');
+          document.getElementById('ann-title').value = '';
+          document.getElementById('ann-content').value = '';
+          loadAnnouncements();
+        } else {
+          alert('❌ Error: ' + data.message);
+        }
+      } catch (err) {
+        alert('❌ Network Error: ' + err.message);
+      }
+    }
+
+    // Load Courses Tab
+    async function loadCourses() {
+      try {
+        const authHeader = currentToken ? { 'Authorization': `Bearer ${currentToken}` } : {};
+        const res = await fetch('/api/courses', { headers: authHeader });
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('courses-total-badge').textContent = data.data.length;
+          const grid = document.getElementById('courses-grid');
+          grid.innerHTML = data.data.map(c => `
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:border-blue-400 transition">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold px-2 py-0.5 bg-blue-50 text-blue-700 rounded">${c.courseCode}</span>
+                <span class="text-xs text-slate-500 font-medium">${c.credits} Credits</span>
+              </div>
+              <h4 class="text-sm font-bold text-slate-800 mb-1">${c.title}</h4>
+              <p class="text-xs text-slate-500 mb-3">${c.description || 'No description provided.'}</p>
+              <div class="flex justify-between items-center text-[11px] text-slate-400 pt-2 border-t border-slate-100">
+                <span>Dept: <b>${c.department}</b></span>
+                <span>Semester: <b>${c.semester}</b></span>
+              </div>
+            </div>
+          `).join('');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Inspect Endpoint in Console
+    async function inspectEndpoint(url) {
+      const output = document.getElementById('api-inspector-output');
+      output.textContent = `// Executing GET ${url}...`;
+      try {
+        const authHeader = currentToken ? { 'Authorization': `Bearer ${currentToken}` } : {};
+        const res = await fetch(url, { headers: authHeader });
+        const data = await res.json();
+        output.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        output.textContent = `// Error: ${err.message}`;
+      }
+    }
+
+    // Initial Load: check if user already in local storage or auto-login as Admin
+    window.addEventListener('DOMContentLoaded', () => {
+      const savedUser = localStorage.getItem('user');
+      if (savedUser && currentToken) {
+        currentUser = JSON.parse(savedUser);
+        updateUserUI();
+        initSocket();
+      } else {
+        // Auto-login as Admin for seamless initial evaluation
+        quickLogin('admin@campus.edu');
+      }
+      loadAnalytics();
+    });
+  </script>
+</body>
+</html>
