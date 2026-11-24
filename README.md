@@ -344,3 +344,5 @@ During faculty evaluation, students may be asked to explain design decisions. Us
 
 ### Q4: Why use both Access Tokens and Refresh Tokens?
 > Access tokens are short-lived (15 minutes) to minimize the attack window if intercepted. Refresh tokens (7 days) are stored in the database, allowing immediate revocation upon logout while maintaining frictionless session renewal without repeatedly asking for user credentials.
+#   C a p s t o n e - a s s i g n m e n t - w e b - d e v - s e m - 2  
+ 
